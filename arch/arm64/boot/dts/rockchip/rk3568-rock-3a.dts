@@ -6,12 +6,20 @@
 #include <dt-bindings/display/drm_mipi_dsi.h>
 #include <dt-bindings/sensor-dev.h>
 #include "rk3568.dtsi"
-#include "rk3568-rock-3a-display.dtsi"
-#include "rk3568-rock-3ab-cameras.dtsi"
 
 / {
 	model = "Radxa ROCK3 Model A";
 	compatible = "radxa,rock3a", "rockchip,rk3568";
+
+	chosen: chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xfe660000 console=ttyFIQ0";
+	};
+	
+	aliases {
+		mmc0 = &sdmmc0;
+		mmc1 = &sdhci;
+		eth0 = &gmac1;
+	};
 
 	fiq_debugger: fiq-debugger {
 		compatible = "rockchip,fiq-debugger";
@@ -23,7 +31,7 @@
 		interrupts = <GIC_SPI 252 IRQ_TYPE_LEVEL_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2m0_xfer>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	debug: debug@fd904000 {
@@ -165,36 +173,55 @@
 		vin-supply = <&dc_12v>;
 	};
 
-	vcc5v0_host: vcc5v0-host-regulator {
+	vcc5v0_usb: vcc5v0-usb {
 		compatible = "regulator-fixed";
-		enable-active-high;
-		gpio = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&vcc5v0_host_en>;
-		regulator-name = "vcc5v0_host";
+		regulator-name = "vcc5v0_usb";
 		regulator-always-on;
 		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	vcc5v0_host: vcc5v0-host-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_host";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
+		vin-supply = <&vcc5v0_usb>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_host_en>;
 	};
 
 	vcc5v0_otg: vcc5v0-otg-regulator {
 		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_otg";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;		
 		enable-active-high;
 		gpio = <&gpio0 RK_PA5 GPIO_ACTIVE_HIGH>;
+		vin-supply = <&vcc5v0_usb>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&vcc5v0_otg_en>;
-		regulator-name = "vcc5v0_otg";
 		regulator-always-on;
 		regulator-boot-on;
 	};
 
 	vcc5v0_usbhub: vcc5v0-usbhub-regulator {
 		compatible = "regulator-fixed";
-		enable-active-high;
-		gpio = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&vcc5v0_hub_en>;
 		regulator-name = "vcc5v0_hub";
 		regulator-always-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
+		vin-supply = <&vcc5v0_usb>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_hub_en>;
 	};
 
 	pcie30_avdd0v9: pcie30-avdd0v9 {
@@ -238,6 +265,38 @@
 		vin-supply = <&vcc5v0_sys>;
 	};
 
+	vcc_camera: vcc-camera-regulator {
+		compatible = "regulator-fixed";
+		gpio = <&gpio1 RK_PB1 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc_camera_en>;
+		regulator-name = "vcc_camera";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		vin-supply = <&vcc3v3_sys>;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
+	};
+
+	vcc_mipi: vcc-mipi-regulator {
+		compatible = "regulator-fixed";
+		gpio = <&gpio3 RK_PC0 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc_mipi_en>;
+		regulator-name = "vcc_mipi";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		vin-supply = <&vcc3v3_sys>;
+
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
+	};
+
 	sdio_pwrseq: sdio-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		clocks = <&rk809 1>;
@@ -251,6 +310,7 @@
 		 * - SDIO_RESET_L_WL_REG_ON
 		 * - PDN (power down when low)
 		 */
+		post-power-on-delay-ms = <200>;
 		reset-gpios = <&gpio3 RK_PD4 GPIO_ACTIVE_LOW>;		//WIFI_REG_ON_H
 	};
 
@@ -299,6 +359,11 @@
 			pinctrl-0 = <&wifi_led>;
 		};
 	};
+};
+
+&cpu0_opp_table {
+	/* to reduce the CPU temperature */
+	/delete-node/ opp-1992000000;
 };
 
 &cpu0 {
@@ -685,6 +750,7 @@
 
 &pmu_io_domains {
 	status = "okay";
+	pmuio1-supply = <&vcc3v3_pmu>;
 	pmuio2-supply = <&vcc3v3_pmu>;
 	vccio1-supply = <&vccio_acodec>;
 	vccio3-supply = <&vccio_sd>;
@@ -738,7 +804,8 @@
 
 &sdhci {
 	bus-width = <8>;
-	supports-emmc;
+	no-sdio;						/* supports-emmc */
+	no-sd;
 	non-removable;
 	max-frequency = <200000000>;
 	status = "okay";
@@ -746,7 +813,8 @@
 
 &sdmmc0 {
 	max-frequency = <150000000>;
-	supports-sd;
+	no-sdio;						/* supports-sd */
+	no-mmc;
 	bus-width = <4>;
 	cap-mmc-highspeed;
 	cap-sd-highspeed;
@@ -761,7 +829,8 @@
 
 &sdmmc2 {
 	max-frequency = <150000000>;
-	supports-sdio;
+	no-sd;							/* supports-sdio */
+	no-mmc;
 	bus-width = <4>;
 	disable-wp;
 	cap-sd-highspeed;
@@ -981,6 +1050,22 @@
 };
 
 &pinctrl {
+	cam {
+		vcc_camera_en: vcc-camera-en {
+			rockchip,pins =
+				/* camera power en */
+				<1 RK_PB1 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	mipi {
+		vcc_mipi_en: vcc-mipi-en {
+			rockchip,pins =
+				/* display power en */
+				<3 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
 	pmic {
 		pmic_int: pmic_int {
 			rockchip,pins =
@@ -994,12 +1079,12 @@
 
 		soc_slppin_slp: soc_slppin_slp {
 			rockchip,pins =
-				<0 RK_PA2 RK_FUNC_1 &pcfg_pull_up>;
+				<0 RK_PA2 1 &pcfg_pull_none>;
 		};
 
 		soc_slppin_rst: soc_slppin_rst {
 			rockchip,pins =
-				<0 RK_PA2 RK_FUNC_2 &pcfg_pull_none>;
+				<0 RK_PA2 2 &pcfg_pull_none>;
 		};
 	};
 
